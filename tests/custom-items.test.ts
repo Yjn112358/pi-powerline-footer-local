@@ -39,6 +39,14 @@ test("parsePowerlineConfig supports object config with custom items", () => {
   assert.deepEqual(config.queue, { compactPromptMode: "queue" });
 });
 
+test("parsePowerlineConfig supports disabling optional feature groups", () => {
+  const config = parsePowerlineConfig({
+    disabledFeatures: [" bashMode ", "queue", "editorTools", "reply", "cd", "workingVibes", "unknown", "queue"],
+  }, ["default"]);
+
+  assert.deepEqual(config.disabledFeatures, ["bashMode", "queue", "editorTools", "reply", "cd", "workingVibes"]);
+});
+
 test("parsePowerlineConfig accepts self-colored custom items", () => {
   const config = parsePowerlineConfig({ customItems: [{ id: "usage", color: "warning", selfColorize: true }] }, ["default"]);
 

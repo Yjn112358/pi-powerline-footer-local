@@ -3,6 +3,16 @@ import { normalizeCostCurrency } from "./currency-rates.ts";
 import { BUILTIN_STATUS_LINE_SEGMENT_IDS } from "./types.ts";
 import type { ColorValue, CustomItemPosition, CustomStatusItem, PowerlinePlacement, PresetDef, StatusLineLayout, StatusLinePreset, StatusLineSegmentId, StatusLineSegmentOptions, StatusLineSeparatorStyle } from "./types.ts";
 
+export type PowerlineFeature = "bashMode" | "queue" | "editorTools" | "reply" | "cd" | "workingVibes";
+
+export const POWERLINE_FEATURE_IDS: readonly PowerlineFeature[] = [
+  "bashMode",
+  "queue",
+  "editorTools",
+  "reply",
+  "cd",
+  "workingVibes",
+];
 export type CompactPromptMode = "queue" | "native";
 export type SecondaryOverflow = "drop" | "wrap";
 
@@ -25,6 +35,7 @@ export interface PowerlineConfig {
   sendDelayMs: number;
   autoFollowUp: boolean;
   workingVibes: { color?: ColorValue | "rainbow" };
+  disabledFeatures: PowerlineFeature[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -239,6 +250,21 @@ function normalizeQueueOptions(raw: unknown): PowerlineConfig["queue"] {
   };
 }
 
+function normalizeDisabledFeatures(raw: unknown): PowerlineFeature[] {
+  if (!Array.isArray(raw)) return [];
+
+  const valid = new Set<string>(POWERLINE_FEATURE_IDS);
+  const disabled: PowerlineFeature[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "string") continue;
+    const normalized = entry.trim();
+    if (!valid.has(normalized)) continue;
+    const feature = normalized as PowerlineFeature;
+    if (!disabled.includes(feature)) disabled.push(feature);
+  }
+  return disabled;
+}
+
 function normalizeSegmentOptions(raw: Record<string, unknown>): StatusLineSegmentOptions {
   const options: StatusLineSegmentOptions = {};
 
@@ -342,6 +368,7 @@ export function parsePowerlineConfig(value: unknown, presets: readonly StatusLin
     sendDelayMs: 0,
     autoFollowUp: false,
     workingVibes: {},
+    disabledFeatures: [],
   };
 
   const directPreset = normalizePreset(value, presets);
@@ -350,6 +377,7 @@ export function parsePowerlineConfig(value: unknown, presets: readonly StatusLin
   if (!isRecord(value)) return defaultConfig;
 
   const customItems = normalizeCustomItems(value.customItems);
+  const disabledFeatures = normalizeDisabledFeatures(value.disabledFeatures);
   const { disabledSegments, invalidDisabledSegments } = normalizeDisabledSegments(value.disabledSegments, customItems);
   const { layout, invalidLayoutSegments } = normalizeLayout(value.layout, customItems);
   const { placement, invalidPlacement } = normalizePlacement(value.placement);
@@ -378,6 +406,7 @@ export function parsePowerlineConfig(value: unknown, presets: readonly StatusLin
     workingVibes: isRecord(value.workingVibes) && typeof value.workingVibes.color === "string" && value.workingVibes.color.trim()
       ? { color: value.workingVibes.color.trim() as ColorValue | "rainbow" }
       : {},
+    disabledFeatures,
   };
 }
 

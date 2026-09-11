@@ -118,6 +118,10 @@ For typing diagnostics, start Pi with `POWERLINE_DEBUG_PERF=1`, reproduce the sl
 - `POWERLINE_PERF_LAST_PROMPT=0`
 
 Preset selection is saved under `powerline` in the agent settings file and restored on startup.
+
+Optional features can be disabled with `powerline.disabledFeatures`. Supported values are `bashMode`, `queue`, `editorTools`, `reply`, `cd`, and `workingVibes`. `editorTools` covers stash, prompt history, editor clipboard, editor boundary shortcuts, and the last-prompt widget.
+
+Run `/reload` after changing settings.
 Run `/powerline default` to switch back to the default preset.
 
 ### Custom items from extension statuses

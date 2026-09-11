@@ -5,6 +5,7 @@
 ### Added
 - **Working vibes can follow the active session model** — Set `workingVibeModel` to `"auto"` (or run `/vibe model auto`) and vibe generation uses the model the session is currently on, switching live with `/model`. Handy when the configured vibe model sits on a different account or plan than the one you actively use. Thanks to [@kyrie2to11](https://github.com/kyrie2to11) for #251.
 - **Local fork status customizations** — Add the combined `token_io` usage segment, weighted session TPS, compact path display, and the custom editor header with the current path and clock.
+- **Feature switches for Powerline modules** — Set `powerline.disabledFeatures` to `bashMode`, `queue`, `editorTools`, `reply`, `cd`, or `workingVibes` to turn those modules off. `editorTools` covers stash, prompt history, editor clipboard, editor boundary shortcuts, and the last-prompt widget; disabling `bashMode` also hides the `shell_mode` segment, and disabling `queue` hides the `queue` segment, the queue widget, and the `/queue` command while leaving messages sent during native compaction to Pi. Run `/reload` after changing settings.
 
 ### Fixed
 - **Native compact prompt mode covers messages sent during compaction** — With `powerline.queue.compactPromptMode: "native"`, messages typed or delayed-sent while a compaction is running now go to Pi's own compaction queue instead of Powerline's `post-compact` queue, so they still reach the session when compaction fails. The default `"queue"` mode is unchanged. Thanks to [@fank](https://github.com/fank) for reporting #250.

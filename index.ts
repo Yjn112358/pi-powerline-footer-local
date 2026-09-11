@@ -10,7 +10,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, rea
 import { join, dirname } from "node:path";
 
 import type { ColorScheme, SegmentContext, StatusLinePreset, StatusLineSegmentId, StatusLineSeparatorStyle } from "./types.ts";
-import type { PowerlineConfig } from "./powerline-config.ts";
+import type { PowerlineConfig, PowerlineFeature } from "./powerline-config.ts";
 import { BashTranscriptStore } from "./bash-mode/transcript.ts";
 import {
   BashCompletionEngine,
@@ -95,6 +95,7 @@ let config: PowerlineConfig = {
   sendDelayMs: 0,
   autoFollowUp: false,
   workingVibes: {},
+  disabledFeatures: [],
 };
 
 const CUSTOM_COMPACTION_STATUS_KEY = "compact-policy";
@@ -1227,8 +1228,11 @@ export default function powerlineFooter(pi: ExtensionAPI) {
   const editorPerf = new EditorPerfProfiler(readEditorPerfOptions());
   const startupSettings = readSettings();
   config = parsePowerlineConfig(startupSettings.powerline, PRESET_NAMES);
+  const isFeatureDisabled = (feature: PowerlineFeature): boolean => config.disabledFeatures.includes(feature);
   let resolvedShortcuts = resolveShortcutConfig(startupSettings);
-  let bashModeSettings = parseBashModeSettings(startupSettings, resolvedShortcuts);
+  let bashModeSettings = isFeatureDisabled("bashMode")
+    ? { ...DEFAULT_BASH_MODE_SETTINGS, toggleShortcut: null, completions: false }
+    : parseBashModeSettings(startupSettings, resolvedShortcuts);
 
   let enabled = true;
   let sessionStartTime = Date.now();
@@ -1882,12 +1886,14 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     }
 
     const settings = readSettings(ctx.cwd);
-    resolvedShortcuts = resolveShortcutConfig(settings);
-    bashModeSettings = parseBashModeSettings(settings, resolvedShortcuts);
-    showLastPrompt = settings.showLastPrompt !== false;
     config = parsePowerlineConfig(settings.powerline, PRESET_NAMES);
+    resolvedShortcuts = resolveShortcutConfig(settings);
+    bashModeSettings = isFeatureDisabled("bashMode")
+      ? { ...DEFAULT_BASH_MODE_SETTINGS, toggleShortcut: null, completions: false }
+      : parseBashModeSettings(settings, resolvedShortcuts);
+    showLastPrompt = settings.showLastPrompt !== false;
     warnInvalidSegmentSettings(ctx);
-    stashedPromptHistory = readPersistedStashHistory();
+    stashedPromptHistory = isFeatureDisabled("editorTools") ? readPersistedStashHistory() : [];
     bashModeActive = false;
     bashTranscript = new BashTranscriptStore(bashModeSettings);
     bashCompletionEngine = new BashCompletionEngine();
@@ -1895,13 +1901,15 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     getThinkingLevelFn = () => ctx.thinkingLevel ?? "off";
     currentThinkingLevel = getThinkingLevelFn();
 
-    if (ctx.hasUI) {
+    if (ctx.hasUI && !isFeatureDisabled("editorTools")) {
       ctx.ui.setStatus("stash", stashedEditorText === null ? undefined : "stash");
     }
 
-    // Initialize vibe manager (needs modelRegistry from ctx)
-    initVibeManager(ctx);
-    setVibeWorkingMessageColor(config.workingVibes.color);
+    // Initialize vibe manager only when working-vibe messages are enabled.
+    if (!isFeatureDisabled("workingVibes")) {
+      initVibeManager(ctx);
+      setVibeWorkingMessageColor(config.workingVibes.color);
+    }
 
     if (enabled && ctx.hasUI) {
       setupCustomEditor(ctx);
@@ -1940,7 +1948,9 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     shellSession?.dispose();
     shellSession = null;
     cancelPostCompactionDelivery();
-    requeuePendingQueueDeliveries("Session ended before queued message started");
+    if (!isFeatureDisabled("queue")) {
+      requeuePendingQueueDeliveries("Session ended before queued message started");
+    }
     powerlineCompacting = false;
     bashModeActive = false;
     currentCtx = null;
@@ -2022,9 +2032,11 @@ export default function powerlineFooter(pi: ExtensionAPI) {
   // Custom-message turns have no user prompt and must preserve the current task.
   pi.on("before_agent_start", async (event, ctx) => {
     if ("messageType" in event && event.messageType === "custom") return;
-    finishPendingQueueDelivery(event.prompt, ctx);
+    if (!isFeatureDisabled("queue")) {
+      finishPendingQueueDelivery(event.prompt, ctx);
+    }
     lastUserPrompt = event.prompt;
-    if (ctx.hasUI) {
+    if (ctx.hasUI && !isFeatureDisabled("workingVibes")) {
       onVibeBeforeAgentStart(event.prompt, ctx.ui.setWorkingMessage);
     }
   });
@@ -2095,7 +2107,9 @@ export default function powerlineFooter(pi: ExtensionAPI) {
   pi.on("agent_start", async (_event, ctx) => {
     isStreaming = true;
     liveAssistantUsage = null;
-    onVibeAgentStart();
+    if (!isFeatureDisabled("workingVibes")) {
+      onVibeAgentStart();
+    }
     dismissWelcome(ctx);
     currentCtx = ctx;
   });
@@ -2151,6 +2165,10 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     liveAssistantUsage = null;
     approximateContextUsage = null;
     coreContextUsageCache.reset();
+    if (isFeatureDisabled("queue")) {
+      powerlineCompacting = false;
+      return;
+    }
     compactionGeneration++;
     cancelPostCompactionDelivery();
     requestQueueRender();
@@ -2165,26 +2183,32 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     coreContextUsageCache.reset();
     compactionGeneration++;
     cancelPostCompactionDelivery();
-    const context = getQueueContext(ctx);
-    if (queueStore.queuedDeliveryItems(context, "post-compact").length > 0) {
-      postCompactionDelivery = { generation: sessionGeneration, context };
-      schedulePostCompactionDelivery();
+    if (!isFeatureDisabled("queue")) {
+      const context = getQueueContext(ctx);
+      if (queueStore.queuedDeliveryItems(context, "post-compact").length > 0) {
+        postCompactionDelivery = { generation: sessionGeneration, context };
+        schedulePostCompactionDelivery();
+      }
+      requestQueueRender();
     }
-    requestQueueRender();
   });
 
   pi.on("session_compact_failed", async (event, ctx) => {
-    finishFailedCompaction(ctx, event.errorMessage ?? "Compaction cancelled");
+    if (!isFeatureDisabled("queue")) {
+      finishFailedCompaction(ctx, event.errorMessage ?? "Compaction cancelled");
+    }
   });
 
   pi.on("agent_settled", async () => {
-    schedulePostCompactionDelivery();
+    if (!isFeatureDisabled("queue")) {
+      schedulePostCompactionDelivery();
+    }
   });
 
   // Also dismiss on tool calls (agent is working) + refresh vibe if rate limit allows
   pi.on("tool_call", async (event, ctx) => {
     dismissWelcome(ctx);
-    if (ctx.hasUI) {
+    if (ctx.hasUI && !isFeatureDisabled("workingVibes")) {
       // Extract recent agent context from session for richer vibe generation
       const agentContext = getRecentAgentContext(ctx);
       onVibeToolCall(event.toolName, event.input, ctx.ui.setWorkingMessage, agentContext);
@@ -2352,37 +2376,42 @@ export default function powerlineFooter(pi: ExtensionAPI) {
   }
 
   function isStashShortcutInput(data: string): boolean {
-    return matchesStashShortcutInput(data, { includePrintableSharpS: config.stashSharpSShortcut });
+    return !isFeatureDisabled("editorTools")
+      && matchesStashShortcutInput(data, { includePrintableSharpS: config.stashSharpSShortcut });
   }
 
   function isPromptHistoryShortcutInput(data: string): boolean {
-    return matchesConfiguredShortcut(data, resolvedShortcuts.stashHistory)
+    return !isFeatureDisabled("editorTools") && (
+      matchesConfiguredShortcut(data, resolvedShortcuts.stashHistory)
       || (resolvedShortcuts.stashHistory === "ctrl+alt+h" && (
         /^\x1b\[104(?::\d*)?(?::\d*)?;7(?::\d+)?u$/.test(data)
         || data === "\x1b[27;7;104~"
         || data === "\x1b[27;7;72~"
-      ));
+      ))
+    );
   }
 
   function getPowerlineShortcutAction(data: string): PowerlineShortcutAction | null {
     if (isKeyRelease(data)) return null;
 
-    if (isPromptHistoryShortcutInput(data)) {
-      return { kind: "stashHistory" };
+    if (!isFeatureDisabled("editorTools")) {
+      if (isPromptHistoryShortcutInput(data)) {
+        return { kind: "stashHistory" };
+      }
+      if (matchesConfiguredShortcut(data, resolvedShortcuts.copyEditor)) {
+        return { kind: "copyEditor" };
+      }
+      if (matchesConfiguredShortcut(data, resolvedShortcuts.cutEditor)) {
+        return { kind: "cutEditor" };
+      }
     }
-    if (matchesConfiguredShortcut(data, resolvedShortcuts.copyEditor)) {
-      return { kind: "copyEditor" };
-    }
-    if (matchesConfiguredShortcut(data, resolvedShortcuts.cutEditor)) {
-      return { kind: "cutEditor" };
-    }
-    if (matchesConfiguredShortcut(data, resolvedShortcuts.queueOpen)) {
+    if (!isFeatureDisabled("queue") && matchesConfiguredShortcut(data, resolvedShortcuts.queueOpen)) {
       return { kind: "queueOpen" };
     }
-    if (resolvedShortcuts.reply && matchesConfiguredShortcut(data, resolvedShortcuts.reply)) {
+    if (!isFeatureDisabled("reply") && resolvedShortcuts.reply && matchesConfiguredShortcut(data, resolvedShortcuts.reply)) {
       return { kind: "reply" };
     }
-    if (matchesConfiguredShortcut(data, bashModeSettings.toggleShortcut)) {
+    if (!isFeatureDisabled("bashMode") && matchesConfiguredShortcut(data, bashModeSettings.toggleShortcut)) {
       return { kind: "bashMode" };
     }
 
@@ -2497,8 +2526,8 @@ export default function powerlineFooter(pi: ExtensionAPI) {
 
     currentCtx = ctx;
     try {
-      if (hasUI) {
-        onVibeAgentEnd(ctx.ui.setWorkingMessage); // working-vibes internal state + reset message
+      if (hasUI && !isFeatureDisabled("workingVibes")) {
+        onVibeAgentEnd(ctx.ui.setWorkingMessage);
       }
     } catch (error) {
       if (!isStaleExtensionContextError(error)) throw error;
@@ -2507,20 +2536,27 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     }
 
     requestStatusRender();
-    schedulePostCompactionDelivery();
+    if (!isFeatureDisabled("queue")) {
+      schedulePostCompactionDelivery();
+    }
   });
 
-  registerCdCommand(pi, () => currentCtx?.cwd ?? process.cwd());
+  if (!isFeatureDisabled("cd")) {
+    registerCdCommand(pi, () => currentCtx?.cwd ?? process.cwd());
+  }
 
-  pi.registerCommand("reply", {
+  if (!isFeatureDisabled("reply")) {
+    pi.registerCommand("reply", {
     description: "Quote a previous user or assistant message into the editor",
     handler: async (args, ctx) => {
       const { reply } = await import("./quote-reply.ts");
       await reply(args, ctx);
     },
-  });
+    });
+  }
 
-  pi.registerCommand("queue", {
+  if (!isFeatureDisabled("queue")) {
+    pi.registerCommand("queue", {
     description: "Manage Powerline queued prompts and project aliases",
     handler: async (args, ctx) => {
       currentCtx = ctx;
@@ -2612,7 +2648,8 @@ export default function powerlineFooter(pi: ExtensionAPI) {
 
       ctx.ui.notify("Usage: /queue [send|retry|clear|target|alias]", "info");
     },
-  });
+    });
+  }
 
   // Command to toggle/configure
   pi.registerCommand("powerline", {
@@ -2703,7 +2740,8 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     },
   });
 
-  pi.registerCommand("stash-history", {
+  if (!isFeatureDisabled("editorTools")) {
+    pi.registerCommand("stash-history", {
     description: "Open prompt history picker",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) return;
@@ -2714,9 +2752,11 @@ export default function powerlineFooter(pi: ExtensionAPI) {
 
       await openStashHistory(ctx);
     },
-  });
+    });
+  }
 
-  pi.registerCommand("bash-mode", {
+  if (!isFeatureDisabled("bashMode")) {
+    pi.registerCommand("bash-mode", {
     description: "Toggle sticky bash mode (on, off, toggle)",
     handler: async (args, ctx) => {
       const mode = args?.trim().toLowerCase() || "toggle";
@@ -2735,6 +2775,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       ctx.ui.notify("Usage: /bash-mode [on|off|toggle]", "warning");
     },
   });
+  }
 
   pi.registerCommand("powerline-perf", {
     description: "Show or reset opt-in editor performance profiling",
@@ -2752,7 +2793,8 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     },
   });
 
-  pi.registerCommand("bash-reset", {
+  if (!isFeatureDisabled("bashMode")) {
+    pi.registerCommand("bash-reset", {
     description: "Reset the managed bash session",
     handler: async (_args, ctx) => {
       shellSession?.dispose();
@@ -2772,11 +2814,12 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       requestStatusRender();
       ctx.ui.notify("Bash session reset", "info");
     },
-  });
+    });
+  }
 
-
-  // Command to set working message theme
-  pi.registerCommand("vibe", {
+  if (!isFeatureDisabled("workingVibes")) {
+    // Command to set working message theme
+    pi.registerCommand("vibe", {
     description: "Set working message theme. Usage: /vibe [theme|off|mode|model|generate]",
     handler: async (args, ctx) => {
       const parts = args?.trim().split(/\s+/) || [];
@@ -2900,9 +2943,12 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       }
     },
   });
+  }
 
   function buildSegmentContext(ctx: any, theme: Theme, allSegmentIds: StatusLineSegmentId[]): SegmentContext {
-    setVibeWorkingMessageTheme(theme);
+    if (!isFeatureDisabled("workingVibes")) {
+      setVibeWorkingMessageTheme(theme);
+    }
     const presetDef = getPreset(config.preset);
     const colors: ColorScheme = presetDef.colors ?? getDefaultColors();
 
@@ -2954,7 +3000,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       : false;
 
     const thinkingLevel = currentThinkingLevel ?? thinkingLevelFromSession ?? getThinkingLevelFn?.() ?? "off";
-    const queueSummary: QueueSummary = allSegmentIds.includes("queue") ? getQueueSummary(ctx) : {
+    const queueSummary: QueueSummary = allSegmentIds.includes("queue") && !isFeatureDisabled("queue") ? getQueueSummary(ctx) : {
       queueCount: 0,
       blockedCount: 0,
       compacting: powerlineCompacting,
@@ -3016,9 +3062,12 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     }
 
     const presetDef = getPreset(config.preset);
+    const disabledSegments = [...config.disabledSegments];
+    if (isFeatureDisabled("bashMode")) disabledSegments.push("shell_mode");
+    if (isFeatureDisabled("queue")) disabledSegments.push("queue");
     const mergedSegments = mergeSegmentsWithCustomItems(presetDef, config.customItems, {
       layout: config.layout,
-      disabledSegments: config.disabledSegments,
+      disabledSegments,
     });
     const allSegmentIds = [
       ...mergedSegments.leftSegments,
@@ -3197,7 +3246,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
 
     if (!terminalWidgets) return;
 
-    if (editorPerf.options.bashWidgets) {
+    if (editorPerf.options.bashWidgets && !isFeatureDisabled("bashMode")) {
       ctx.ui.setWidget("powerline-bash-transcript", (_tui: any, theme: Theme) => ({
         dispose() {},
         invalidate() {},
@@ -3215,15 +3264,17 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       },
     }), { placement: "belowEditor" });
 
-    ctx.ui.setWidget("powerline-queue-preview", (_tui: any, theme: Theme) => ({
-      dispose() {},
-      invalidate() {},
-      render(width: number): string[] {
-        return measureWidget("queue-preview", () => renderPowerlineQueuePreviewLines(width, theme));
-      },
-    }), { placement: "belowEditor" });
+    if (!isFeatureDisabled("queue")) {
+      ctx.ui.setWidget("powerline-queue-preview", (_tui: any, theme: Theme) => ({
+        dispose() {},
+        invalidate() {},
+        render(width: number): string[] {
+          return measureWidget("queue-preview", () => renderPowerlineQueuePreviewLines(width, theme));
+        },
+      }), { placement: "belowEditor" });
+    }
 
-    if (editorPerf.options.lastPrompt) {
+    if (editorPerf.options.lastPrompt && !isFeatureDisabled("editorTools")) {
       ctx.ui.setWidget("powerline-last-prompt", () => ({
         dispose() {},
         invalidate() {},
@@ -3248,6 +3299,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
 
     stashShortcutInputUnsubscribe?.();
     stashShortcutInputUnsubscribe = typeof ctx.ui.onTerminalInput === "function"
+      && (!isFeatureDisabled("editorTools") || !isFeatureDisabled("queue") || !isFeatureDisabled("reply") || !isFeatureDisabled("bashMode"))
       ? ctx.ui.onTerminalInput((data: string) => {
         if (!enabled || !ctx.hasUI || tuiRef?.hasOverlay?.()) {
           return undefined;
@@ -3293,8 +3345,8 @@ export default function powerlineFooter(pi: ExtensionAPI) {
         },
         onSubmitCommand: (command) => void runShellCommand(command, ctx),
         editorBoundaryShortcuts: {
-          start: resolvedShortcuts.editorStart,
-          end: resolvedShortcuts.editorEnd,
+          start: isFeatureDisabled("editorTools") ? null : resolvedShortcuts.editorStart,
+          end: isFeatureDisabled("editorTools") ? null : resolvedShortcuts.editorEnd,
         },
         onInterrupt: () => {
           shellSession?.interrupt();
@@ -3368,8 +3420,10 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       };
 
       currentEditor = editor;
-      trackPromptHistory(editor);
-      restorePromptHistory(editor);
+      if (!isFeatureDisabled("editorTools")) {
+        trackPromptHistory(editor);
+        restorePromptHistory(editor);
+      }
       attachAutocompleteProvider();
 
       const baseHandleInput = editor.handleInput.bind(editor);
@@ -3392,7 +3446,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
 
         const isSubmit = keybindings.matches(data, "tui.input.submit") && !keybindings.matches(data, "tui.input.newLine");
         const isFollowUpSubmit = keybindings.matches(data, "app.message.followUp");
-        if (!powerlineCompacting && !bashModeActive && isSubmit && typeof ctx.compact === "function") {
+        if (!powerlineCompacting && !bashModeActive && !isFeatureDisabled("queue") && isSubmit && typeof ctx.compact === "function") {
           const editorText = editor.getExpandedText().trim();
           const compactQueuedPrompt = config.queue.compactPromptMode === "queue"
             ? parseCompactQueuedPrompt(editorText)
@@ -3421,7 +3475,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
         }
 
         // Native mode leaves mid-compaction submits to Pi, which queues them and sends them when compaction ends.
-        if (powerlineCompacting && config.queue.compactPromptMode === "queue" && !bashModeActive && (isSubmit || isFollowUpSubmit)) {
+        if (!isFeatureDisabled("queue") && powerlineCompacting && config.queue.compactPromptMode === "queue" && !bashModeActive && (isSubmit || isFollowUpSubmit)) {
           const text = editor.getExpandedText().trim();
           if (!text) {
             sendPendingNow();
