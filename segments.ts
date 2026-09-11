@@ -58,19 +58,30 @@ const modelSegment: StatusLineSegment = {
       modelName = modelName.slice(7);
     }
 
-    let content = withIcon(icons.model, modelName);
+    const modelText = color(ctx, "model", withIcon(icons.model, modelName));
+    let content = modelText;
 
     if (opts.showThinkingLevel !== false && ctx.model?.reasoning) {
       const level = ctx.thinkingLevel || "off";
-      if (level !== "off") {
-        const thinkingText = getThinkingText(level);
-        if (thinkingText) {
-          content += `${SEP_DOT}${thinkingText}`;
+      const thinkingText = getThinkingText(level);
+      if (thinkingText) {
+        let coloredThinking: string;
+        if (level === "high" || level === "xhigh" || level === "max") {
+          coloredThinking = rainbow(thinkingText);
+        } else if (level === "minimal") {
+          coloredThinking = color(ctx, "thinkingMinimal", thinkingText);
+        } else if (level === "low") {
+          coloredThinking = color(ctx, "thinkingLow", thinkingText);
+        } else if (level === "medium") {
+          coloredThinking = color(ctx, "thinkingMedium", thinkingText);
+        } else {
+          coloredThinking = color(ctx, "thinking", thinkingText);
         }
+        content += `${SEP_DOT}${coloredThinking}`;
       }
     }
 
-    return { content: color(ctx, "model", content), visible: true };
+    return { content, visible: true };
   },
 };
 
@@ -93,20 +104,41 @@ const shellModeSegment: StatusLineSegment = {
   },
 };
 
+function compactPath(pwd: string, maxLength: number): string {
+  if (pwd.length <= maxLength) return pwd;
+
+  const normalized = pwd.replace(/\\/g, "/");
+  const drive = /^[A-Za-z]:\//.test(normalized)
+    ? normalized.slice(0, 3)
+    : normalized.startsWith("/") ? "/" : "";
+  const basenameValue = normalized.split("/").filter(Boolean).pop() ?? normalized;
+  const marker = `${drive}…/`;
+
+  if (marker.length + basenameValue.length <= maxLength) {
+    return marker + basenameValue;
+  }
+
+  const available = Math.max(1, maxLength - marker.length);
+  return marker + basenameValue.slice(0, Math.max(1, available - 1)) + "…";
+}
+
 const pathSegment: StatusLineSegment = {
   id: "path",
   render(ctx) {
     const icons = getIcons();
     const opts = ctx.options.path ?? {};
-    const mode = opts.mode ?? "basename";
+    const mode = opts.mode ?? "compact";
 
     let pwd = ctx.shellModeActive && ctx.shellCwd ? ctx.shellCwd : (ctx.cwd ?? process.cwd());
+    if (mode === "compact") {
+      pwd = compactPath(pwd, opts.maxLength ?? 12);
+    }
     const home = process.env.HOME || process.env.USERPROFILE;
 
     if (mode === "basename") {
       // Just the last directory component (cross-platform)
       pwd = basename(pwd) || pwd;
-    } else {
+    } else if (mode !== "compact") {
       // Abbreviate home directory for abbreviated/full modes
       if (home && pwd.startsWith(home)) {
         pwd = `~${pwd.slice(home.length)}`;
@@ -297,6 +329,29 @@ const tokenOutSegment: StatusLineSegment = {
   },
 };
 
+const tokenIoSegment: StatusLineSegment = {
+  id: "token_io",
+  render(ctx) {
+    const { input, output } = ctx.usageStats;
+    if (!input && !output) return { content: "", visible: false };
+
+    const parts: string[] = [];
+    if (input) parts.push(`↑ ${formatTokens(input)}`);
+    if (output) parts.push(`↓ ${formatTokens(output)}`);
+    return { content: color(ctx, "tokens", parts.join(" ")), visible: true };
+  },
+};
+
+const tpsSegment: StatusLineSegment = {
+  id: "tps",
+  render(ctx) {
+    if (ctx.tps === null || !Number.isFinite(ctx.tps) || ctx.tps <= 0) {
+      return { content: "", visible: false };
+    }
+    return { content: color(ctx, "tokens", `TPS ${ctx.tps.toFixed(1)} tok/s`), visible: true };
+  },
+};
+
 const tokenTotalSegment: StatusLineSegment = {
   id: "token_total",
   render(ctx) {
@@ -463,7 +518,7 @@ const cacheReadSegment: StatusLineSegment = {
     if (format === "percent") {
       content = [icons.cache, `${hitRate}%`].filter(Boolean).join(" ");
     } else {
-      const tokens = [icons.cache, icons.input, formatTokens(cacheRead)].filter(Boolean).join(" ");
+      const tokens = [icons.cache, formatTokens(cacheRead)].filter(Boolean).join(" ");
       content = format === "both" ? `${tokens} (${hitRate}%)` : tokens;
     }
     return { content: color(ctx, "tokens", content), visible: true };
@@ -524,6 +579,8 @@ export const SEGMENTS: Record<BuiltinStatusLineSegmentId, StatusLineSegment> = {
   queue: queueSegment,
   token_in: tokenInSegment,
   token_out: tokenOutSegment,
+  token_io: tokenIoSegment,
+  tps: tpsSegment,
   token_total: tokenTotalSegment,
   cost: costSegment,
   context_pct: contextPctSegment,

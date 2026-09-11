@@ -30,11 +30,12 @@ import { getSeparator } from "./separators.ts";
 import { renderSegment } from "./segments.ts";
 import { resolveThinkingLevelSelection } from "./thinking-level.ts";
 import { getGitStatus, invalidateGitStatus, invalidateGitBranch, subscribeGitUpdates } from "./git-status.ts";
-import { SessionBranchCache, SessionTokenStatsCache } from "./token-stats.ts";
+import { SessionBranchCache, SessionGenerationSpeedTracker, SessionTokenStatsCache } from "./token-stats.ts";
 import { ansi, getFgAnsiCode } from "./colors.ts";
 import { WelcomeComponent, WelcomeHeader, discoverLoadedCounts, getRecentSessions } from "./welcome.ts";
 import { createRenderScheduler } from "./render-scheduler.ts";
-import { getEditorAutocompleteProvider, passAutocompleteProviderThroughPreviousEditor } from "./editor-composition.ts";
+import { getIcons } from "./icons.ts";
+import { getEditorAutocompleteProvider, passAutocompleteProviderThroughPreviousEditor, renderEditorHeader } from "./editor-composition.ts";
 import { EditorPerfProfiler, readEditorPerfOptions } from "./editor-performance.ts";
 import { CoreContextUsageCache, estimateInitialContextTokens, estimateUnknownContextUsage, resolveDisplayContextUsage, type CoreContextUsage } from "./context-usage.ts";
 import { isStaleExtensionContextError, shouldShowStartupWelcome } from "./lifecycle.ts";
@@ -1240,6 +1241,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
   let liveAssistantUsage: SessionAssistantUsage | null = null;
   let approximateContextUsage: CoreContextUsage | null = null;
   let isStreaming = false;
+  const generationSpeed = new SessionGenerationSpeedTracker();
   let tuiRef: any = null;
   let restoreFooterStatusRepaintHook: (() => void) | null = null;
   let stashShortcutInputUnsubscribe: (() => void) | null = null;
@@ -1259,6 +1261,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
   let stashedEditorText: string | null = null;
   let stashedPromptHistory: string[] = readPersistedStashHistory();
   let currentEditor: any = null;
+  let editorClockTimer: ReturnType<typeof setInterval> | null = null;
   let bashModeActive = false;
   let bashTranscript = new BashTranscriptStore(bashModeSettings);
   let bashCompletionEngine = new BashCompletionEngine();
@@ -1867,6 +1870,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     lastUserPrompt = "";
     isStreaming = false;
     liveAssistantUsage = null;
+    generationSpeed.reset();
     approximateContextUsage = event.reason === "reload" ? estimateUnknownContextUsage(ctx) : null;
     powerlineCompacting = false;
     cancelPostCompactionDelivery();
@@ -1925,6 +1929,10 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     dismissWelcome(ctx);
     restorePendingSend();
     statusRenderScheduler.cancel();
+    if (editorClockTimer) {
+      clearInterval(editorClockTimer);
+      editorClockTimer = null;
+    }
     restoreFooterStatusRepaintHook?.();
     restoreFooterStatusRepaintHook = null;
     stashShortcutInputUnsubscribe?.();
@@ -2107,6 +2115,9 @@ export default function powerlineFooter(pi: ExtensionAPI) {
   pi.on("message_start", async (event, ctx) => {
     currentCtx = ctx;
     const message = event.message;
+    if (isSessionAssistantMessage(message)) {
+      generationSpeed.start();
+    }
     if (isRecord(message) && message.role === "user") {
       finishPendingQueueDelivery(getPromptHistoryText(message.content), ctx);
     }
@@ -2116,7 +2127,9 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     currentCtx = ctx;
     coreContextUsageCache.reset();
     if (isSessionAssistantMessage(event.message)) {
-      if (event.message.stopReason === "error" || event.message.stopReason === "aborted") {
+      const successful = event.message.stopReason !== "error" && event.message.stopReason !== "aborted";
+      generationSpeed.finish(successful ? event.message.usage.output : 0);
+      if (!successful) {
         liveAssistantUsage = null;
       } else if (getUsageTokenTotal(event.message.usage) > 0) {
         liveAssistantUsage = event.message.usage;
@@ -2961,6 +2974,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       contextPercent,
       contextWindow,
       contextApproximate,
+      tps: generationSpeed.tokensPerSecond,
       autoCompactEnabled: ctx.settingsManager?.getCompactionSettings?.()?.enabled ?? true,
       customCompactionEnabled: customCompactionEnabled || extensionStatuses.has(CUSTOM_COMPACTION_STATUS_KEY),
       usingSubscription,
@@ -3010,7 +3024,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       ...mergedSegments.leftSegments,
       ...mergedSegments.rightSegments,
       ...mergedSegments.secondarySegments,
-    ];
+    ].filter((segment) => segment !== "path");
     let segmentCtx: SegmentContext;
     try {
       segmentCtx = editorPerf.options.enabled
@@ -3222,9 +3236,15 @@ export default function powerlineFooter(pi: ExtensionAPI) {
 
   function setupCustomEditor(ctx: any) {
     snapshotPromptHistory(currentEditor);
+    if (editorClockTimer) {
+      clearInterval(editorClockTimer);
+      editorClockTimer = null;
+    }
     if (!enabled) {
       return;
     }
+    editorClockTimer = setInterval(() => tuiRef?.requestRender(), 60_000);
+    editorClockTimer.unref?.();
 
     stashShortcutInputUnsubscribe?.();
     stashShortcutInputUnsubscribe = typeof ctx.ui.onTerminalInput === "function"
@@ -3509,7 +3529,11 @@ export default function powerlineFooter(pi: ExtensionAPI) {
           // it. The base render above ran at contentWidth, so an embedded line
           // has to be re-rendered at the width this frame actually uses.
           const embeddedTopBorder = editor.renderEmbeddedTopBorder(width - 2);
-          result.push(" " + (embeddedTopBorder ?? colorEditorBorder(editor, "─".repeat(width - 2))));
+          result.push(
+            embeddedTopBorder != null
+              ? " " + embeddedTopBorder
+              : renderEditorHeader(ctx.cwd ?? process.cwd(), width, getIcons().folder),
+          );
 
           for (let i = 1; i < bottomBorderIndex; i++) {
             const prefix = i === 1 ? promptPrefix : contPrefix;

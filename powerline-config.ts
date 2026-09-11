@@ -251,7 +251,7 @@ function normalizeSegmentOptions(raw: Record<string, unknown>): StatusLineSegmen
 
   if (isRecord(raw.path)) {
     options.path = {
-      ...(raw.path.mode === "basename" || raw.path.mode === "abbreviated" || raw.path.mode === "full" ? { mode: raw.path.mode } : {}),
+      ...(raw.path.mode === "compact" || raw.path.mode === "basename" || raw.path.mode === "abbreviated" || raw.path.mode === "full" ? { mode: raw.path.mode } : {}),
       ...(typeof raw.path.maxLength === "number" && Number.isFinite(raw.path.maxLength) && raw.path.maxLength > 0
         ? { maxLength: Math.floor(raw.path.maxLength) }
         : {}),

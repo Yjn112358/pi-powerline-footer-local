@@ -21,32 +21,32 @@ export interface PowerlineThemeConfig {
 
 // Default color scheme (uses pi theme colors)
 const DEFAULT_COLORS: Required<ColorScheme> = {
-  model: "#d787af",  // Pink/mauve (matching original colors.ts)
-  shellMode: "accent",
-  path: "#00afaf",  // Teal/cyan (matching original colors.ts)
-  gitDirty: "warning",
-  gitClean: "success",
-  thinking: "thinkingOff",
-  thinkingMinimal: "thinkingMinimal",
-  thinkingLow: "thinkingLow",
-  thinkingMedium: "thinkingMedium",
+  model: "#d787af",
+  shellMode: "#FFCB6B",
+  path: "#82AAFF",
+  gitDirty: "#FFCB6B",
+  gitClean: "#C3E88D",
+  thinking: "#4E5666",
+  thinkingMinimal: "#737B8C",
+  thinkingLow: "#82AAFF",
+  thinkingMedium: "#61D5E8",
   thinkingHigh: "rainbow",
   thinkingXhigh: "rainbow",
   thinkingMax: "rainbow",
-  context: "dim",
-  contextWarn: "warning",
-  contextError: "error",
-  cost: "text",
-  tokens: "muted",
-  queue: "accent",
-  separator: "dim",
-  border: "borderMuted",
+  context: "#737B8C",
+  contextWarn: "#FFCB6B",
+  contextError: "#F07178",
+  cost: "#FFCB6B",
+  tokens: "#61D5E8",
+  queue: "#C792EA",
+  separator: "#4E5666",
+  border: "#4E5666",
 };
 
 // Rainbow colors for high thinking levels
 const RAINBOW_COLORS = [
-  "#b281d6", "#d787af", "#febc38", "#e4c00f", 
-  "#89d281", "#00afaf", "#178fb9", "#b281d6",
+  "#C792EA", "#F07178", "#FFCB6B", "#C3E88D",
+  "#61D5E8", "#82AAFF", "#F78C6C", "#C792EA",
 ];
 
 // Cache for user theme overrides

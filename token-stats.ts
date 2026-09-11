@@ -2,6 +2,36 @@ import type { AssistantMessage } from "@earendil-works/pi-ai";
 
 type SessionAssistantUsage = AssistantMessage["usage"];
 
+export class SessionGenerationSpeedTracker {
+  private startedAt: number | null = null;
+  private outputTokens = 0;
+  private generationMs = 0;
+
+  get tokensPerSecond(): number | null {
+    return this.generationMs > 0 ? this.outputTokens / (this.generationMs / 1000) : null;
+  }
+
+  start(now = Date.now()): void {
+    this.startedAt = now;
+  }
+
+  finish(outputTokens: number, now = Date.now()): number | null {
+    const startedAt = this.startedAt;
+    this.startedAt = null;
+    if (startedAt === null || outputTokens <= 0) return this.tokensPerSecond;
+
+    this.outputTokens += outputTokens;
+    this.generationMs += Math.max(now - startedAt, 1);
+    return this.tokensPerSecond;
+  }
+
+  reset(): void {
+    this.startedAt = null;
+    this.outputTokens = 0;
+    this.generationMs = 0;
+  }
+}
+
 export interface SessionTokenStats {
   input: number;
   output: number;

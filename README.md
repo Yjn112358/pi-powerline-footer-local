@@ -23,6 +23,8 @@ Customizes the default [pi](https://github.com/badlogic/pi-mono) editor with a p
 
 **Powerline placement** — The primary Powerline row can be shown above or below the editor.
 
+**Customized editor header** — This local fork replaces the editor's top border with a single appearance-only header. It shows the full current project path with a folder icon on the left, a fluorescent-green (`ANSI 92`) path and `HH:MM` clock on the right, and a light-green horizontal rule between them. The duplicate path segment is removed from the powerline status row. The native editor buffer, history, autocomplete, cursor handling, paste behavior, and keyboard shortcuts remain unchanged. The clock refreshes once per minute.
+
 **Native Pi layout** — Pi owns fixed input, feed scrolling, selection, and terminal behavior; this extension supplies powerline widgets and the custom bash/stash/editor integrations.
 
 **Live thinking level indicator** — Shows current thinking level (`think:off`, `think:med`, etc.) with per-level colors. High, xhigh, and max levels use a rainbow effect inspired by Claude Code's ultrathink.
@@ -33,7 +35,7 @@ Customizes the default [pi](https://github.com/badlogic/pi-mono) editor with a p
 
 **Context awareness** — Color-coded warnings above 70% (yellow) and above 90% (red) context usage. During streaming, the context segment refreshes from live assistant usage instead of waiting for the next turn. Auto-compact indicator when enabled. If `pi-custom-compaction` is installed and enabled, the powerline automatically hides native context segments so the footer does not show stale post-summary usage.
 
-**Token intelligence** — Smart formatting (1.2k, 45M), used/max/percentage context display, subscription detection, and configurable subscription cost display.
+**Token intelligence** — Smart formatting (1.2k, 45M), used/max/percentage context display, combined input/output token usage, weighted session TPS, subscription detection, and configurable subscription cost display.
 
 **Sticky bash mode** — Toggle bash mode with `ctrl+shift+b` or `/bash-mode`. It keeps a managed shell session alive for the current pi session, shows a dedicated `shell_mode` segment, streams command output into an embedded transcript below the editor, and lets `cd` or exported state persist across commands.
 
@@ -98,7 +100,7 @@ You can also set it in the agent settings file (`~/.pi/agent/settings.json` by d
 
 | Preset | Description |
 |--------|-------------|
-| `default` | Model, thinking, path (basename), git, context, tokens, cost |
+| `default` | Model, thinking, path (compact), git, context, tokens, cost |
 | `minimal` | Just path (basename), git, context |
 | `compact` | Model, git, cost, context |
 | `full` | Everything including hostname, time, abbreviated path |
@@ -484,11 +486,12 @@ The rainbow is the default for `high`, `xhigh`, and `max`. Override it per level
 
 ## Path Display
 
-The path segment supports three modes:
+The path segment supports four modes:
 
 | Mode | Example | Description |
 |------|---------|-------------|
-| `basename` | `powerline-footer` | Just the directory name (default) |
+| `compact` | `C:/…/powerline-footer` | Keep the drive/root and final directory within the configured `maxLength` (default 12) |
+| `basename` | `powerline-footer` | Just the directory name |
 | `abbreviated` | `…/extensions/powerline-footer` | Full path with home abbreviated and length limit |
 | `full` | `~/.pi/agent/extensions/powerline-footer` | Complete path with home abbreviated |
 
@@ -524,7 +527,7 @@ The origin remote is detected (SSH or HTTPS) and mapped to an icon: GitHub (), G
 
 ## Segments
 
-`model` · `thinking` · `shell_mode` · `path` · `git` · `subagents` · `token_in` · `token_out` · `token_total` · `cost` · `context_pct` · `context_total` · `time_spent` · `time` · `session` · `hostname` · `cache_read` · `cache_write` · `extension_statuses`
+`model` · `thinking` · `shell_mode` · `path` · `git` · `subagents` · `token_in` · `token_out` · `token_io` · `tps` · `token_total` · `cost` · `context_pct` · `context_total` · `time_spent` · `time` · `session` · `hostname` · `cache_read` · `cache_write` · `extension_statuses`
 
 ## Separators
 
@@ -539,22 +542,22 @@ Colors are configurable via pi's theme system. Each preset defines its own color
 | Semantic | Theme Color | Description |
 |----------|-------------|-------------|
 | `model` | `#d787af` | Model name |
-| `shellMode` | `accent` | Bash mode segment |
-| `path` | `#00afaf` | Directory path |
-| `gitClean` | `success` | Git branch (clean) |
-| `gitDirty` | `warning` | Git branch (dirty) |
-| `thinking` | `thinkingOff` | Thinking level (`off`) |
-| `thinkingMinimal` | `thinkingMinimal` | Thinking level (`minimal`) |
-| `thinkingLow` | `thinkingLow` | Thinking level (`low`) |
-| `thinkingMedium` | `thinkingMedium` | Thinking level (`medium`) |
+| `shellMode` | `#FFCB6B` | Bash mode segment |
+| `path` | `#82AAFF` | Directory path |
+| `gitClean` | `#C3E88D` | Git branch (clean) |
+| `gitDirty` | `#FFCB6B` | Git branch (dirty) |
+| `thinking` | `#4E5666` | Thinking level (`off`) |
+| `thinkingMinimal` | `#737B8C` | Thinking level (`minimal`) |
+| `thinkingLow` | `#82AAFF` | Thinking level (`low`) |
+| `thinkingMedium` | `#61D5E8` | Thinking level (`medium`) |
 | `thinkingHigh` | `rainbow` | Thinking level (`high`) |
 | `thinkingXhigh` | `rainbow` | Thinking level (`xhigh`) |
 | `thinkingMax` | `rainbow` | Thinking level (`max`) |
-| `context` | `dim` | Context usage |
-| `contextWarn` | `warning` | Context usage >70% |
-| `contextError` | `error` | Context usage >90% |
-| `cost` | `text` | Cost display |
-| `tokens` | `muted` | Token counts |
+| `context` | `#737B8C` | Context usage |
+| `contextWarn` | `#FFCB6B` | Context usage >70% |
+| `contextError` | `#F07178` | Context usage >90% |
+| `cost` | `#FFCB6B` | Cost display |
+| `tokens` | `#61D5E8` | Token counts |
 
 ### Custom Theme Override
 

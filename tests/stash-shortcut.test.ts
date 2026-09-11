@@ -421,23 +421,23 @@ test("Git rendering reuses the cwd-owned provider only on demand and refreshes a
       assert.deepEqual(calls.map(([, args]) => args), polling === "full" ? [["status", "--porcelain"]] : []);
       t.diagnostic(`Attached ${polling}: ${calls.map(([, args]) => args?.join(" ")).join(", ") || "no subprocesses"}`);
     }
-    assert.match(render(), /<warning>[^<]*branch-a<\/warning>/, "full mode keeps dirty coloring with hidden counts");
+    assert.match(render(), /\x1b\[38;2;255;203;107m[^\x1b]*branch-a/, "full mode keeps dirty coloring with hidden counts");
     fs.unlinkSync(join(repoA, "dirty"));
     for (const notify of listeners) notify();
-    assert.match(render(), /<warning>[^<]*branch-a<\/warning>/, "same-cwd refresh serves stale counts");
+    assert.match(render(), /\x1b\[38;2;255;203;107m[^\x1b]*branch-a/, "same-cwd refresh serves stale counts");
     await waitForGitUpdates();
-    assert.match(render(), /<success>[^<]*branch-a<\/success>/);
+    assert.match(render(), /\x1b\[38;2;195;232;141m[^\x1b]*branch-a/);
 
     writeFileSync(join(repoA, "dirty"), "untracked again");
     await start({ git: { hostIcon: true } });
     render();
     await waitForGitUpdates();
     assert.ok(render().includes(NERD_ICONS.github));
-    assert.match(render(), /<warning>/);
+    assert.match(render(), /\x1b\[38;2;255;203;107m/);
     await start({ git: { hostIcon: true } }, repoB);
     const immediate = render();
     assert.match(immediate, /branch-b/);
-    assert.doesNotMatch(immediate, /branch-a|<warning>/);
+    assert.doesNotMatch(immediate, /branch-a|\x1b\[38;2;255;203;107m/);
     assert.ok(!immediate.includes(NERD_ICONS.github));
     await waitForGitUpdates();
     assert.ok(render().includes(NERD_ICONS.gitlab));

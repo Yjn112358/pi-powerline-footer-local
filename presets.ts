@@ -23,14 +23,14 @@ const NERD_COLORS: ColorScheme = {
 
 export const PRESETS: Record<StatusLinePreset, PresetDef> = {
   default: {
-    leftSegments: ["model", "thinking", "shell_mode", "path", "git", "queue", "context_pct", "cache_read", "cost"],
+    leftSegments: ["model", "shell_mode", "path", "git", "queue", "context_pct", "token_io", "tps", "cache_read", "cost"],
     rightSegments: [],
     secondarySegments: ["extension_statuses"],
     separator: "powerline-thin",
     colors: DEFAULT_COLORS,
     segmentOptions: {
-      model: { showThinkingLevel: false },
-      path: { mode: "basename" },
+      model: { showThinkingLevel: true },
+      path: { mode: "compact", maxLength: 12 },
       git: { showBranch: true, showStaged: true, showUnstaged: true, showUntracked: true },
     },
   },

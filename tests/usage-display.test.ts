@@ -39,6 +39,7 @@ function createSegmentContext(options: StatusLineSegmentOptions = {}, overrides:
     contextPercent: 0,
     contextWindow: 0,
     contextApproximate: false,
+    tps: null,
     autoCompactEnabled: true,
     customCompactionEnabled: false,
     usingSubscription: false,
@@ -58,6 +59,26 @@ function createSegmentContext(options: StatusLineSegmentOptions = {}, overrides:
     ...overrides,
   };
 }
+
+// ── custom usage segments ───────────────────────────────────────────────────
+
+test("token_io combines input and output usage", () => {
+  const both = createSegmentContext({}, {
+    usageStats: { input: 12_300, output: 4_500, cacheRead: 0, cacheWrite: 0, cost: 0, subagentCost: 0 },
+  });
+  assert.equal(stripAnsi(renderSegment("token_io", both).content), "↑ 12k ↓ 4.5k");
+
+  const inputOnly = createSegmentContext({}, {
+    usageStats: { input: 900, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, subagentCost: 0 },
+  });
+  assert.equal(stripAnsi(renderSegment("token_io", inputOnly).content), "↑ 900");
+  assert.deepEqual(renderSegment("token_io", createSegmentContext()), { content: "", visible: false });
+});
+
+test("tps renders weighted session generation speed", () => {
+  assert.equal(stripAnsi(renderSegment("tps", createSegmentContext({}, { tps: 42.456 })).content), "TPS 42.5 tok/s");
+  assert.deepEqual(renderSegment("tps", createSegmentContext()), { content: "", visible: false });
+});
 
 // ── context_pct format ──────────────────────────────────────────────────────
 
@@ -139,7 +160,7 @@ test("cache_read defaults to raw token count", () => {
   });
 
   const rendered = renderSegment("cache_read", ctx);
-  assert.equal(stripAnsi(rendered.content), "cache in: 12k");
+  assert.equal(stripAnsi(rendered.content), "↻ cache 12k");
 });
 
 test("cache_read percent format renders the cache hit rate", () => {
@@ -148,7 +169,7 @@ test("cache_read percent format renders the cache hit rate", () => {
   });
 
   const rendered = renderSegment("cache_read", ctx);
-  assert.equal(stripAnsi(rendered.content), "cache 80%");
+  assert.equal(stripAnsi(rendered.content), "↻ cache 80%");
 });
 
 test("cache_read both format renders raw token count and cache hit rate", () => {
@@ -157,19 +178,19 @@ test("cache_read both format renders raw token count and cache hit rate", () => 
   });
 
   const rendered = renderSegment("cache_read", ctx);
-  assert.equal(stripAnsi(rendered.content), "cache in: 8.0k (80%)");
+  assert.equal(stripAnsi(rendered.content), "↻ cache 8.0k (80%)");
 });
 
 test("cache_read percent and both formats handle zero input without NaN", () => {
   const percentCtx = createSegmentContext({ cache_read: { format: "percent" } }, {
     usageStats: { input: 0, output: 0, cacheRead: 5, cacheWrite: 0, cost: 0, subagentCost: 0 },
   });
-  assert.equal(stripAnsi(renderSegment("cache_read", percentCtx).content), "cache 100%");
+  assert.equal(stripAnsi(renderSegment("cache_read", percentCtx).content), "↻ cache 100%");
 
   const bothCtx = createSegmentContext({ cache_read: { format: "both" } }, {
     usageStats: { input: 0, output: 0, cacheRead: 5, cacheWrite: 0, cost: 0, subagentCost: 0 },
   });
-  assert.equal(stripAnsi(renderSegment("cache_read", bothCtx).content), "cache in: 5 (100%)");
+  assert.equal(stripAnsi(renderSegment("cache_read", bothCtx).content), "↻ cache 5 (100%)");
 
   const hidden = createSegmentContext({ cache_read: { format: "both" } });
   assert.deepEqual(renderSegment("cache_read", hidden), { content: "", visible: false });
@@ -200,12 +221,15 @@ test("queue segment highlights compaction-held prompts", () => {
 
 // ── config parsing / merging ────────────────────────────────────────────────
 
-test("parsePowerlineConfig accepts context and cache_read formats", () => {
+test("parsePowerlineConfig accepts context, cache_read, and compact path formats", () => {
   const config = parsePowerlineConfig({
+    path: { mode: "compact", maxLength: 12 },
     context: { format: "percent" },
     cache_read: { format: "both" },
   }, PRESET_NAMES);
 
+  assert.equal(config.segmentOptions.path?.mode, "compact");
+  assert.equal(config.segmentOptions.path?.maxLength, 12);
   assert.equal(config.segmentOptions.context?.format, "percent");
   assert.equal(config.segmentOptions.cache_read?.format, "both");
 });

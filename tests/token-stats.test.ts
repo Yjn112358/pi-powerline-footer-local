@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { computeSessionTokenStats, SessionBranchCache, SessionTokenStatsCache } from "../token-stats.ts";
+import { computeSessionTokenStats, SessionBranchCache, SessionGenerationSpeedTracker, SessionTokenStatsCache } from "../token-stats.ts";
 
 function makeUsage(input: number, output: number, cacheRead = 0, cacheWrite = 0, costPerToken = 0.001) {
   return {
@@ -50,6 +50,26 @@ function subagentSlashResultEvent(costs: number[]) {
     details: { result: { details: { results: costs.map((cost) => ({ usage: { cost } })) } } },
   };
 }
+
+test("generation speed tracker reports weighted output throughput", () => {
+  const tracker = new SessionGenerationSpeedTracker();
+  assert.equal(tracker.tokensPerSecond, null);
+
+  tracker.start(1_000);
+  assert.equal(tracker.finish(20, 2_000), 20);
+  tracker.start(3_000);
+  assert.equal(tracker.finish(60, 5_000), 80 / 3);
+
+  tracker.reset();
+  assert.equal(tracker.tokensPerSecond, null);
+});
+
+test("generation speed tracker ignores incomplete and empty samples", () => {
+  const tracker = new SessionGenerationSpeedTracker();
+  assert.equal(tracker.finish(10, 1_000), null);
+  tracker.start(1_000);
+  assert.equal(tracker.finish(0, 2_000), null);
+});
 
 test("session branch cache reuses a leaf path and refreshes when the leaf changes", () => {
   const cache = new SessionBranchCache();
@@ -242,7 +262,7 @@ test("reset forces recomputation", () => {
 
 test("index.ts wires the token stats cache into buildSegmentContext", () => {
   const source = readFileSync(new URL("../index.ts", import.meta.url), "utf-8");
-  assert.match(source, /import \{ SessionBranchCache, SessionTokenStatsCache \} from "\.\/token-stats\.ts";/);
+  assert.match(source, /import \{ SessionBranchCache, SessionGenerationSpeedTracker, SessionTokenStatsCache \} from "\.\/token-stats\.ts";/);
   assert.match(source, /sessionBranchCache\.get\(ctx\.sessionManager\)/);
   assert.match(source, /tokenStatsCache\.get\(sessionEvents\)/);
   assert.match(source, /tokenStatsCache\.reset\(\)/);

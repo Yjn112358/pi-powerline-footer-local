@@ -28,20 +28,24 @@ export const SEP_DOT = " · ";
 
 // Thinking level display text (Unicode/ASCII)
 export const THINKING_TEXT_UNICODE: Record<string, string> = {
+  off: "[off]",
   minimal: "[min]",
   low: "[low]",
   medium: "[med]",
   high: "[high]",
   xhigh: "[xhi]",
+  max: "[max]",
 };
 
 // Thinking level display text (Nerd Fonts - with icons)
 export const THINKING_TEXT_NERD: Record<string, string> = {
+  off: "\u{F05E} off",       // ban
   minimal: "\u{F0E7} min",   // lightning bolt
   low: "\u{F10C} low",       // circle outline
   medium: "\u{F192} med",    // dot circle
   high: "\u{F111} high",     // circle
   xhigh: "\u{F06D} xhi",     // fire
+  max: "\u{F06D} max",       // fire
 };
 
 // Get thinking text based on font support
@@ -67,7 +71,7 @@ export const NERD_ICONS: IconSet = {
   cost: "\uF155",       // nf-fa-dollar
   time: "\uF017",       // nf-fa-clock_o
   agents: "\uF0C0",     // nf-fa-users
-  cache: "\uF1C0",      // nf-fa-database (cache)
+  cache: "↻ cache",      // cache read indicator
   input: "\uF090",      // nf-fa-sign_in (input arrow)
   output: "\uF08B",     // nf-fa-sign_out (output arrow)
   host: "\uF109",       // nf-fa-laptop (host)
@@ -80,7 +84,7 @@ export const NERD_ICONS: IconSet = {
 export const ASCII_ICONS: IconSet = {
   pi: "π",
   model: "",
-  folder: "dir",
+  folder: "📁",
   branch: "⎇",
   git: "⎇",
   github: "⎇",
@@ -91,7 +95,7 @@ export const ASCII_ICONS: IconSet = {
   cost: "$",
   time: "◷",
   agents: "AG",
-  cache: "cache",
+  cache: "↻ cache",
   input: "in:",
   output: "out:",
   host: "host",

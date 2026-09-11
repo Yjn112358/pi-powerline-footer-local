@@ -38,6 +38,7 @@ function createSegmentContext(overrides: Partial<SegmentContext> = {}): SegmentC
     contextPercent: 0,
     contextWindow: 0,
     contextApproximate: false,
+    tps: null,
     autoCompactEnabled: true,
     customCompactionEnabled: false,
     usingSubscription: false,
@@ -99,6 +100,16 @@ test("model segment can show provider-qualified ids", () => {
   assert.equal(stripAnsi(qualified.content), "anthropic/claude-sonnet-4");
   assert.equal(stripAnsi(alreadyQualified.content), "openai/gpt-4.1");
   assert.equal(stripAnsi(nestedId.content), "commandcode/deepseek/deepseek-v4-flash");
+});
+
+test("model segment includes colorized thinking level", () => {
+  const rendered = renderSegment("model", createSegmentContext({
+    model: { id: "reasoning-model", name: "Reasoning Model", reasoning: true },
+    thinkingLevel: "max",
+    options: { model: { showThinkingLevel: true } },
+  }));
+
+  assert.equal(stripAnsi(rendered.content), "Reasoning Model · [max]");
 });
 
 test("self-colored custom items preserve ANSI resets and skip configured color", () => {
@@ -183,13 +194,13 @@ test("cost segment supports subscription display modes and converted currencies"
 
   __resetCurrencyRatesForTest();
 
-  assert.deepEqual(subscription, { content: "(sub)", visible: true });
-  assert.deepEqual(reportedCost, { content: "$0.42", visible: true });
-  assert.deepEqual(both, { content: "$0.42 (sub)", visible: true });
-  assert.deepEqual(zeroReported, { content: "(sub)", visible: true });
-  assert.deepEqual(zeroBoth, { content: "(sub)", visible: true });
-  assert.deepEqual(withSubagentCost, { content: "$1.00", visible: true });
-  assert.deepEqual(convertedCurrency, { content: "¥9.00", visible: true });
+  assert.deepEqual(subscription, { content: "\x1b[38;2;255;203;107m(sub)\x1b[0m", visible: true });
+  assert.deepEqual(reportedCost, { content: "\x1b[38;2;255;203;107m$0.42\x1b[0m", visible: true });
+  assert.deepEqual(both, { content: "\x1b[38;2;255;203;107m$0.42 (sub)\x1b[0m", visible: true });
+  assert.deepEqual(zeroReported, { content: "\x1b[38;2;255;203;107m(sub)\x1b[0m", visible: true });
+  assert.deepEqual(zeroBoth, { content: "\x1b[38;2;255;203;107m(sub)\x1b[0m", visible: true });
+  assert.deepEqual(withSubagentCost, { content: "\x1b[38;2;255;203;107m$1.00\x1b[0m", visible: true });
+  assert.deepEqual(convertedCurrency, { content: "\x1b[38;2;255;203;107m¥9.00\x1b[0m", visible: true });
 });
 
 test("context segment shows used tokens, maximum, and percentage", () => {

@@ -148,7 +148,7 @@ test("theme.json can override icons without touching colors", () => {
     const icons = getIcons();
     assert.equal(icons.auto, "↯");
     assert.equal(icons.warning, "");
-    assert.equal(icons.folder, "dir");
+    assert.equal(icons.folder, "📁");
   } finally {
     if (originalTheme === null) {
       if (existsSync(themePath)) unlinkSync(themePath);

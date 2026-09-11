@@ -41,6 +41,8 @@ export const BUILTIN_STATUS_LINE_SEGMENT_IDS = [
   "queue",
   "token_in",
   "token_out",
+  "token_io",
+  "tps",
   "token_total",
   "cost",
   "context_pct",
@@ -88,7 +90,7 @@ export type StatusLinePreset =
 export interface StatusLineSegmentOptions {
   model?: { showThinkingLevel?: boolean; display?: "name" | "qualified" };
   path?: { 
-    mode?: "basename" | "abbreviated" | "full";
+    mode?: "compact" | "basename" | "abbreviated" | "full";
     maxLength?: number;
   };
   git?: {
@@ -200,6 +202,8 @@ export interface SegmentContext {
   contextPercent: number | null;
   contextWindow: number;
   contextApproximate: boolean;
+  /** Weighted output-token generation speed for completed assistant messages. */
+  tps: number | null;
   autoCompactEnabled: boolean;
   customCompactionEnabled: boolean;
   usingSubscription: boolean;

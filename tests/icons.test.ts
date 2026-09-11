@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { hasNerdFonts } from "../icons.ts";
+import { THINKING_TEXT_NERD, THINKING_TEXT_UNICODE, hasNerdFonts } from "../icons.ts";
+
+test("thinking labels include off and max in both icon modes", () => {
+  assert.equal(THINKING_TEXT_UNICODE.off, "[off]");
+  assert.equal(THINKING_TEXT_UNICODE.max, "[max]");
+  assert.match(THINKING_TEXT_NERD.off, /off$/);
+  assert.match(THINKING_TEXT_NERD.max, /max$/);
+});
 
 test("hasNerdFonts uses TERM only when TERM_PROGRAM is unset and preserves overrides", () => {
   const saved = { ...process.env };
