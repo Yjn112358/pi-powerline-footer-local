@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### 本地上游同步
+- 合入上游 0.20.1，并保留本地配色、路径时钟顶栏、Token/TPS 展示及功能开关。模型段的 high/xhigh/max 思考标记改用上游分级主题接口，支持 `thinkingHigh`、`thinkingXhigh`、`thinkingMax`；未配置时仍显示彩虹。涉及 `segments.ts` 及思考配色回归测试；不新增配置键。
+- `index.ts` 中「压缩期间发送的消息」冲突按两侧语义合并：保留上游 #252 的 `queue.compactPromptMode` 判断，并叠加本地 `disabledFeatures` 中的 `queue` 开关；关闭该开关时交由 Pi 处理原生压缩队列。
+- 验证：`npm ci`、`npm run typecheck`、`npm test`（275 项中 269 通过、0 失败、6 跳过）与 `git diff --check` 通过；人工 TUI 的窄/宽终端验证尚未执行。
+
 ### Added
 - **Working vibes can follow the active session model** — Set `workingVibeModel` to `"auto"` (or run `/vibe model auto`) and vibe generation uses the model the session is currently on, switching live with `/model`. Handy when the configured vibe model sits on a different account or plan than the one you actively use. Thanks to [@kyrie2to11](https://github.com/kyrie2to11) for #251.
 - **Local fork status customizations** — Add the combined `token_io` usage segment, weighted session TPS, compact path display, and the custom editor header with the current path and clock.

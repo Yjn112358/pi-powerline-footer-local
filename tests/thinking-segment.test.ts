@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderSegment } from "../segments.ts";
 import { rainbow } from "../theme.ts";
+import { getThinkingText } from "../icons.ts";
 import type { ColorScheme, SegmentContext, ThemeLike } from "../types.ts";
 
 function hexAnsi(hex: `#${string}`): string {
@@ -73,6 +74,22 @@ test("thinking segment uses rainbow styling for high through max by default", ()
       content: rainbow(`think:${level}`),
       visible: true,
     });
+  }
+});
+
+test("model segment honors high-level thinking theme overrides", () => {
+  const colors: ColorScheme = {
+    model: "#444444",
+    thinkingHigh: "#111111",
+    thinkingXhigh: "#222222",
+    thinkingMax: "#333333",
+  };
+  for (const [level, hex] of [["high", "#111111"], ["xhigh", "#222222"], ["max", "#333333"]] as const) {
+    const ctx = createSegmentContext(level, colors);
+    ctx.model = { id: "reasoning-model", name: "Reasoning Model", reasoning: true };
+    const rendered = renderSegment("model", ctx);
+    assert.equal(rendered.visible, true);
+    assert.ok(rendered.content.includes(`${hexAnsi(hex)}${getThinkingText(level)}\x1b[0m`));
   }
 });
 

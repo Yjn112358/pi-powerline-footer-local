@@ -66,8 +66,12 @@ const modelSegment: StatusLineSegment = {
       const thinkingText = getThinkingText(level);
       if (thinkingText) {
         let coloredThinking: string;
-        if (level === "high" || level === "xhigh" || level === "max") {
-          coloredThinking = rainbow(thinkingText);
+        if (level === "high") {
+          coloredThinking = color(ctx, "thinkingHigh", thinkingText);
+        } else if (level === "xhigh") {
+          coloredThinking = color(ctx, "thinkingXhigh", thinkingText);
+        } else if (level === "max") {
+          coloredThinking = color(ctx, "thinkingMax", thinkingText);
         } else if (level === "minimal") {
           coloredThinking = color(ctx, "thinkingMinimal", thinkingText);
         } else if (level === "low") {
